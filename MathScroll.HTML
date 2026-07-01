@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>MathScroll - AI Engineering</title>
+    
+    <!-- Fonts & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- KaTeX for Math -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+
+    <style>
+        :root {
+            --bg-grad-start: #121212;
+            --bg-grad-end: #000000;
+            --card-front: #1c1c1e;
+            --card-back: #121212;
+            --accent: #6366f1;
+            --accent-hover: #4f46e5;
+            --accent-2: #06b6d4;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warn: #f59e0b;
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
+            --safe-top: env(safe-area-inset-top);
+            --safe-bottom: env(safe-area-inset-bottom);
+            --card-radius: 24px;
+            --base-font-size: 16px;
+        }
+
+        body.theme-ocean { --bg-grad-start:#0f172a; --bg-grad-end:#020617; --card-front:#1e293b; --card-back:#0f172a; --accent:#38bdf8; --accent-2:#818cf8; }
+        body.theme-sunset { --bg-grad-start:#4a044e; --bg-grad-end:#2e1065; --card-front:#701a75; --card-back:#4c1d95; --accent:#f472b6; --accent-2:#fb923c; }
+        body.theme-forest { --bg-grad-start:#052e16; --bg-grad-end:#022c22; --card-front:#14532d; --card-back:#064e3b; --accent:#34d399; --accent-2:#a3e635; }
+
+        * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+        html { font-size: var(--base-font-size); }
+        body {
+            background-color: var(--bg-grad-end);
+            color: var(--text-main);
+            font-family: 'Inter', -apple-system, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            height: 100dvh;
+            background: linear-gradient(135deg, var(--bg-grad-start) 0%, var(--bg-grad-end) 100%);
+            transition: background 0.5s ease;
+        }
+        code, .mono { font-family: 'JetBrains Mono', monospace; }
+
+        /* HEADER NAV */
+        .header-nav {
+            position: fixed; top:0; left:0; right:0; z-index:100;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.0) 100%);
+            padding-top: calc(16px + var(--safe-top));
+            padding-bottom: 20px;
+            display:flex; align-items:center;
+        }
+        .category-wrapper {
+            display:flex; gap:12px; overflow-x:auto; padding:0 20px;
+            scrollbar-width:none; -webkit-overflow-scrolling:touch; flex:1;
+            mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
+            -webkit-mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
+        }
+        .category-wrapper::-webkit-scrollbar { display:none; }
+        .cat-item {
+            white-space:nowrap; padding:8px 16px; font-size:0.875rem; color:var(--text-dim);
+            cursor:pointer; transition:all .2s ease; font-weight:500;
+            border-radius:20px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.05);
+        }
+        .cat-item.active { color:#fff; background:var(--accent); border-color:var(--accent); font-weight:600; box-shadow:0 4px 12px rgba(0,0,0,0.4); }
+        .settings-btn { background:none; border:none; color:white; padding:0 20px; cursor:pointer; display:flex; align-items:center; }
+        .settings-btn svg { width:24px; height:24px; }
+
+        /* SUB FILTER BAR */
+        .sub-filter-bar {
+            position:fixed; left:0; right:0; z-index:95;
+            top: calc(60px + var(--safe-top));
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            padding: 12px 20px; display:flex; gap:10px; align-items:center;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            overflow-x:auto; scrollbar-width:none;
+        }
+        .sub-filter-bar::-webkit-scrollbar{display:none;}
+        .chip {
+            white-space:nowrap; padding:6px 14px; font-size:0.8rem; font-weight:600; color:var(--text-dim);
+            background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:16px; cursor:pointer;
+            transition: all 0.2s;
+        }
+        .chip.active { color:#fff; background:var(--accent-2); border-color:var(--accent-2); }
+
+        /* FEED & SNAP SCROLLING */
+        #main-feed { height:100vh; height:100dvh; overflow-y:scroll; scroll-snap-type:y mandatory; scrollbar-width:none; }
+        #main-feed::-webkit-scrollbar { display:none; }
+        .snap-section {
+            height:100vh; height:100dvh; width:100%; scroll-snap-align:start; scroll-snap-stop:always;
+            display:flex; justify-content:center; align-items:center; position:relative;
+            perspective:1500px; padding: 0 20px;
+        }
+        
+        /* EMPTY STATE / LOADING */
+        .empty-state { text-align:center; color:var(--text-dim); padding:40px; }
+        .empty-state svg { width:64px; height:64px; margin-bottom:16px; opacity:.4; }
+        .empty-state h3 { color:var(--text-main); margin-bottom:8px; font-size:1.2rem; }
+
+        /* 3D FLIP CARD */
+        .card {
+            width:100%; max-width:440px; height:65vh; max-height:650px; min-height:450px; position:relative;
+            transform-style:preserve-3d; transition:transform 0.7s cubic-bezier(.175,.885,.32,1.275); cursor:pointer;
+        }
+        .card.flipped { transform: rotateY(180deg); }
+        .card-inner { position:relative; width:100%; height:100%; transform-style:preserve-3d; }
+        .face {
+            position:absolute; inset:0; backface-visibility:hidden; -webkit-backface-visibility:hidden;
+            border-radius:var(--card-radius); display:flex; flex-direction:column; padding:28px; text-align:left;
+            box-shadow:0 24px 48px -12px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.08) inset;
+            overflow-y:auto; background-color:var(--card-front);
+        }
+        .face::-webkit-scrollbar{width:4px;}
+        .face::-webkit-scrollbar-thumb{background:rgba(255,255,255,.2);border-radius:4px;}
+        .face-front { 
+            background:linear-gradient(160deg, var(--card-front) 0%, rgba(0,0,0,0.5) 100%); 
+            z-index:2; justify-content:center; align-items:center; text-align:center; 
+        }
+        .face-back { 
+            background:var(--card-back); transform:rotateY(180deg); 
+            border:1px solid rgba(255,255,255,0.1); justify-content:flex-start; 
+        }
+
+        .badge-row { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-bottom:16px; }
+        .tag-badge {
+            font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;
+            padding:4px 10px; border-radius:8px; background:rgba(255,255,255,0.1); color:var(--text-dim);
+        }
+        .tag-badge.diff-easy { background:rgba(16,185,129,.15); color:var(--success); }
+        .tag-badge.diff-medium { background:rgba(245,158,11,.15); color:var(--warn); }
+        .tag-badge.diff-hard { background:rgba(239,68,68,.15); color:var(--danger); }
+        
+        .card-question { font-size:1.35rem; font-weight:600; line-height:1.6; color:var(--text-main); margin-top:8px; }
+        .answer-summary { font-size:1rem; line-height:1.7; color:#cbd5e1; margin:16px 0; text-align:left; font-weight:600; padding: 14px; background: rgba(255,255,255,0.05); border-radius:12px; }
+
+        /* Save Button inside card */
+        .save-card-btn {
+            position:absolute; top:20px; right:20px; width:44px; height:44px; border-radius:50%;
+            background:rgba(255,255,255,0.08); border:none; color:var(--text-dim); display:flex; align-items:center;
+            justify-content:center; cursor:pointer; z-index:10; transition: 0.2s;
+        }
+        .save-card-btn:hover { background:rgba(255,255,255,0.15); }
+        .save-card-btn.saved { color:var(--accent); background:rgba(99,102,241,0.2); }
+        .save-card-btn svg { width:22px; height:22px; fill:currentColor; }
+
+        .level-badge {
+            position:absolute; bottom:20px; right:20px; padding:6px 12px; background:rgba(255,255,255,0.05);
+            border-radius:10px; font-size:0.75rem; font-weight:700; color:var(--text-dim); text-transform:uppercase;
+            border:1px solid rgba(255,255,255,0.05);
+        }
+
+        .card-buttons { display:flex; gap:10px; margin-top:auto; padding-top:20px; flex-wrap:wrap; }
+        .card-action-btn {
+            flex: 1; min-width: 120px; padding:12px 14px; border-radius:14px; background:rgba(255,255,255,0.1); 
+            border:1px solid rgba(255,255,255,0.1); color:white; display:flex; align-items:center; justify-content:center;
+            gap:8px; font-size:0.85rem; font-weight:600; cursor:pointer; transition: 0.2s;
+        }
+        .card-action-btn:active { transform:scale(0.96); }
+        .card-action-btn svg { width:18px; height:18px; }
+        .card-action-btn.primary { background:var(--accent); border-color:var(--accent); }
+        .card-action-btn.primary:hover { background:var(--accent-hover); }
+        .card-action-btn.success { background:rgba(16,185,129,0.2); border-color:var(--success); color:var(--success); }
+
+        .tap-hint {
+            position:absolute; bottom:calc(30px + var(--safe-bottom)); width:100%; text-align:center;
+            font-size:0.8rem; color:var(--text-dim); opacity:0.7; pointer-events:none; font-weight:500;
+        }
+
+        /* BOTTOM SHEETS & MODALS */
+        .bottom-sheet {
+            position:fixed; bottom:0; left:0; right:0; background:#18181b; 
+            border-top-left-radius:28px; border-top-right-radius:28px;
+            padding:24px; padding-bottom:calc(40px + var(--safe-bottom)); 
+            transform:translateY(110%); transition:transform 0.4s cubic-bezier(0.16,1,0.3,1); 
+            z-index:200; box-shadow:0 -10px 50px rgba(0,0,0,0.8);
+            border-top:1px solid rgba(255,255,255,0.08); max-height:85vh; overflow-y:auto;
+        }
+        .bottom-sheet.open { transform:translateY(0); }
+        .sheet-handle { width:40px; height:5px; background:rgba(255,255,255,0.2); border-radius:3px; margin:0 auto 20px; }
+        .sheet-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; padding-bottom:16px; border-bottom:1px solid rgba(255,255,255,0.08); }
+        .sheet-title { font-size:1.4rem; font-weight:700; color:white; }
+        .sheet-close { background:rgba(255,255,255,0.1); border:none; border-radius:50%; color:var(--text-dim); width:32px; height:32px; font-size:1.4rem; cursor:pointer; display:flex; align-items:center; justify-content:center;}
+
+        .overlay { position:fixed; inset:0; background:rgba(0,0,0,0.8); backdrop-filter:blur(5px); -webkit-backdrop-filter:blur(5px); opacity:0; pointer-events:none; transition:opacity 0.3s; z-index:150; }
+        .overlay.active { opacity:1; pointer-events:auto; }
+
+        .modal {
+            position:fixed; top:50%; left:50%; transform:translate(-50%,-50%) scale(0.95); background:#18181b; width:90%;
+            max-width:400px; border-radius:24px; padding:24px; z-index:300; opacity:0; pointer-events:none;
+            transition:all 0.3s cubic-bezier(0.34,1.56,0.64,1); border:1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+        }
+        .modal.open { opacity:1; pointer-events:auto; transform:translate(-50%,-50%) scale(1); }
+        .modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; }
+        .modal-title { font-size:1.3rem; font-weight:700; }
+        
+        /* SETTINGS UI */
+        .setting-group { margin-bottom:24px; }
+        .setting-label { display:block; color:var(--text-dim); font-size:0.85rem; margin-bottom:12px; text-transform:uppercase; letter-spacing:0.5px; font-weight:600;}
+        .theme-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+        .theme-opt { height:44px; border-radius:12px; cursor:pointer; border:2px solid transparent; transition:0.2s; }
+        .theme-opt.active { border-color:white; transform:scale(1.05); }
+        .t-midnight { background:linear-gradient(135deg,#333,#000); }
+        .t-ocean { background:linear-gradient(135deg,#0f172a,#020617); }
+        .t-sunset { background:linear-gradient(135deg,#701a75,#4c1d95); }
+        .t-forest { background:linear-gradient(135deg,#14532d,#022c22); }
+        .slider-container { display:flex; align-items:center; gap:16px; background:rgba(255,255,255,0.05); padding:12px 16px; border-radius:12px;}
+        .slider { flex:1; -webkit-appearance:none; height:4px; background:rgba(255,255,255,.2); border-radius:2px; }
+        .slider::-webkit-slider-thumb { -webkit-appearance:none; width:20px; height:20px; background:var(--accent); border-radius:50%; cursor:pointer; }
+        .switch-row { display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.05); padding:12px 16px; border-radius:12px; margin-bottom:16px;}
+        .toggle-switch { width:50px; height:28px; background:rgba(255,255,255,.1); border-radius:14px; position:relative; cursor:pointer; transition:0.3s; }
+        .toggle-switch::after { content:''; position:absolute; top:3px; left:3px; width:22px; height:22px; background:white; border-radius:50%; transition:0.3s; box-shadow:0 2px 4px rgba(0,0,0,0.3);}
+        .toggle-switch.active { background:var(--success); }
+        .toggle-switch.active::after { transform:translateX(22px); }
+
+        /* STEP PLAYER UI */
+        .step-progress { display:flex; gap:6px; margin-bottom:20px; }
+        .step-dot { flex:1; height:6px; border-radius:3px; background:rgba(255,255,255,0.1); transition: 0.3s; }
+        .step-dot.done { background:var(--accent); }
+        .step-dot.current { background:var(--accent-2); transform: scaleY(1.2); }
+        .step-box { background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:20px; min-height:140px; margin-bottom:20px; }
+        .step-title { font-size:0.8rem; text-transform:uppercase; letter-spacing:0.8px; color:var(--accent-2); font-weight:700; margin-bottom:12px; }
+        .step-content { font-size:1.05rem; line-height:1.7; color:#f8fafc; }
+        .step-nav { display:flex; gap:12px; }
+        .step-nav button { flex:1; padding:14px; border-radius:14px; border:none; font-weight:700; cursor:pointer; font-family:'Inter'; font-size:1rem; transition: 0.2s;}
+        .step-nav .btn-prev { background:rgba(255,255,255,0.1); color:white; }
+        .step-nav .btn-next { background:var(--accent); color:white; }
+        .step-nav button:active { transform: scale(0.97); }
+        .step-nav button:disabled { opacity:0.3; cursor:not-allowed; }
+        .final-answer-box { margin-top:16px; padding:18px; border-radius:14px; background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.3); display:none; }
+        .final-answer-box.show { display:block; animation: fadeIn 0.5s ease; }
+        .final-answer-box .fa-label { font-size:0.75rem; text-transform:uppercase; color:var(--success); font-weight:700; margin-bottom:8px; }
+        
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* TOAST NOTIFICATION */
+        #toast {
+            position:fixed; bottom:calc(30px + var(--safe-bottom)); left:50%; transform:translateX(-50%) translateY(30px);
+            background:rgba(20,20,24,0.95); border:1px solid rgba(255,255,255,.15); color:white; padding:14px 24px; border-radius:16px;
+            font-size:0.9rem; font-weight:500; z-index:500; opacity:0; pointer-events:none; transition:all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+            max-width:90vw; text-align:center; box-shadow:0 10px 40px rgba(0,0,0,.6); backdrop-filter: blur(10px);
+        }
+        #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+        .katex-display { margin: 0.8em 0 !important; overflow-x:auto; overflow-y:hidden; padding-bottom: 5px; }
+        .katex { font-size: 1.05em !important; }
+    </style>
+</head>
+<body>
+
+<!-- TOP NAVIGATION -->
+<div class="header-nav">
+    <div class="category-wrapper" id="catBar"></div>
+    <button class="settings-btn" onclick="openSettings()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+    </button>
+</div>
+
+<!-- CONTEXTUAL FILTER BAR -->
+<div class="sub-filter-bar" id="subFilterBar"></div>
+
+<!-- MAIN FEED (SCROLLABLE) -->
+<div id="main-feed"></div>
+
+<!-- GLOBAL OVERLAY -->
+<div class="overlay" id="overlay" onclick="closeAllOverlays()"></div>
+
+<!-- STEP PLAYER (MATH) BOTTOM SHEET -->
+<div class="bottom-sheet" id="stepSheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+        <div>
+            <div class="sheet-title" id="stepSheetTitle">Step-by-step</div>
+            <div class="paper-meta" id="stepSheetMeta" style="margin-top: 4px; color:var(--text-dim); font-size:0.85rem;"></div>
+        </div>
+        <button class="sheet-close" onclick="closeAllOverlays()">&times;</button>
+    </div>
+    <div class="step-progress" id="stepProgress"></div>
+    <div class="step-box">
+        <div class="step-title" id="stepTitle">Step 1</div>
+        <div class="step-content" id="stepContent"></div>
+    </div>
+    <div class="final-answer-box" id="finalAnswerBox">
+        <div class="fa-label">Final Answer</div>
+        <div id="finalAnswerContent" style="font-weight: 600;"></div>
+    </div>
+    <div class="step-nav">
+        <button class="btn-prev" id="stepPrevBtn" onclick="stepPlayerPrev()">◀ Prev</button>
+        <button class="btn-next" id="stepNextBtn" onclick="stepPlayerNext()">Next ▶</button>
+    </div>
+</div>
+
+<!-- SETTINGS MODAL -->
+<div class="modal" id="settingsModal">
+    <div class="modal-header">
+        <span class="modal-title">Settings</span>
+        <button class="sheet-close" onclick="closeAllOverlays()">&times;</button>
+    </div>
+    <div class="setting-group">
+        <span class="setting-label">Theme</span>
+        <div class="theme-grid">
+            <div class="theme-opt t-midnight" onclick="setTheme('default')"></div>
+            <div class="theme-opt t-ocean" onclick="setTheme('ocean')"></div>
+            <div class="theme-opt t-sunset" onclick="setTheme('sunset')"></div>
+            <div class="theme-opt t-forest" onclick="setTheme('forest')"></div>
+        </div>
+    </div>
+    <div class="setting-group">
+        <span class="setting-label">Font Size</span>
+        <div class="slider-container">
+            <span style="font-size:0.8rem; font-weight:bold;">A</span>
+            <input type="range" min="14" max="22" value="16" class="slider" id="fontSlider" oninput="setFontSize(this.value)">
+            <span style="font-size:1.3rem; font-weight:bold;">A</span>
+        </div>
+    </div>
+    <div class="setting-group switch-row">
+        <span class="setting-label" style="margin:0">Auto-Advance Math Steps</span>
+        <div class="toggle-switch" id="autoPlaySwitch" onclick="toggleAutoPlay()"></div>
+    </div>
+    <div class="setting-group" style="margin-bottom:0;">
+        <span class="setting-label">Data & Storage</span>
+        <button class="card-action-btn danger" style="width:100%;" onclick="clearAllData()">
+            Clear Saved Cards & Progress
+        </button>
+    </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+/* =========================================================
+   MATH & AI ENGINEERING EXERCISES (80 ITEMS)
+   ========================================================= */
+const MATH_DB = {
+"calculus": { label:"📈 AI Calculus", items:[
+    { id:"c1", difficulty:"Easy", q:"Find the derivative of the Sigmoid function: $\\sigma(x) = \\frac{1}{1+e^{-x}}$", steps:[ {title:"Rewrite", content:"$\\sigma(x) = (1+e^{-x})^{-1}$"}, {title:"Chain Rule", content:"$\\frac{d}{dx} = -(1+e^{-x})^{-2} \\cdot (-e^{-x})$"}, {title:"Simplify", content:"$\\left(\\frac{1}{1+e^{-x}}\\right) \\left(\\frac{e^{-x}}{1+e^{-x}}\\right)$"} ], answer:"$\\sigma'(x) = \\sigma(x)(1-\\sigma(x))$" },
+    { id:"c2", difficulty:"Easy", q:"Derive the gradient of MSE loss $L = (y - \\hat{y})^2$ w.r.t $w$, for $\\hat{y} = wx$.", steps:[ {title:"Chain Rule", content:"$\\frac{\\partial L}{\\partial w} = \\frac{\\partial L}{\\partial \\hat{y}} \\cdot \\frac{\\partial \\hat{y}}{\\partial w}$"}, {title:"Components", content:"$\\frac{\\partial L}{\\partial \\hat{y}} = -2(y - \\hat{y})$, and $\\frac{\\partial \\hat{y}}{\\partial w} = x$"} ], answer:"$\\frac{\\partial L}{\\partial w} = -2x(y - \\hat{y})$" },
+    { id:"c3", difficulty:"Easy", q:"Derivative of the ReLU activation: $f(x) = \\max(0, x)$", steps:[ {title:"Analyze piecewise", content:"If $x > 0$, $f(x) = x$. If $x < 0$, $f(x) = 0$."}, {title:"Differentiate", content:"Derivative is $1$ for $x > 0$, and $0$ for $x < 0$."} ], answer:"$f'(x) = 1$ if $x>0$, else $0$" },
+    { id:"c4", difficulty:"Easy", q:"Derivative of Tanh activation: $f(x) = \\tanh(x)$", steps:[ {title:"Definition", content:"$\\tanh(x) = \\frac{e^x - e^{-x}}{e^x + e^{-x}}$"}, {title:"Quotient Rule", content:"Result simplifies to $1 - \\left(\\frac{e^x - e^{-x}}{e^x + e^{-x}}\\right)^2$"} ], answer:"$f'(x) = 1 - \\tanh^2(x)$" },
+    { id:"c5", difficulty:"Medium", q:"Derivative of the Swish activation: $f(x) = x \\cdot \\sigma(x)$", steps:[ {title:"Product Rule", content:"$f'(x) = 1 \\cdot \\sigma(x) + x \\cdot \\sigma'(x)$"}, {title:"Substitute Sigmoid Derivative", content:"$f'(x) = \\sigma(x) + x\\sigma(x)(1-\\sigma(x))$"}, {title:"Factor", content:"$f'(x) = \\sigma(x) + f(x)(1-\\sigma(x))$"} ], answer:"$f'(x) = \\sigma(x) + f(x)(1-\\sigma(x))$" },
+    { id:"c6", difficulty:"Medium", q:"Gradient of Binary Cross Entropy: $L = -[y\\log(p) + (1-y)\\log(1-p)]$", steps:[ {title:"Differentiate terms", content:"$\\frac{\\partial}{\\partial p}[-y\\log(p)] = -\\frac{y}{p}$"}, {title:"Second term", content:"$\\frac{\\partial}{\\partial p}[-(1-y)\\log(1-p)] = \\frac{1-y}{1-p}$"}, {title:"Combine", content:"$\\frac{1-y}{1-p} - \\frac{y}{p} = \\frac{p-y}{p(1-p)}$"} ], answer:"$\\frac{\\partial L}{\\partial p} = \\frac{p-y}{p(1-p)}$" },
+    { id:"c7", difficulty:"Medium", q:"Gradient of L2 Regularization term $R(w) = \\frac{\\lambda}{2} ||w||_2^2$", steps:[ {title:"Expand Norm", content:"$R(w) = \\frac{\\lambda}{2} \\sum_i w_i^2$"}, {title:"Differentiate w.r.t $w_i$", content:"$\\frac{\\partial}{\\partial w_i} \\left( \\frac{\\lambda}{2} w_i^2 \\right) = \\lambda w_i$"} ], answer:"$\\nabla_w R(w) = \\lambda w$" },
+    { id:"c8", difficulty:"Medium", q:"Derivative of Softplus: $f(x) = \\ln(1 + e^x)$", steps:[ {title:"Chain Rule", content:"$\\frac{d}{dx} \\ln(u) = \\frac{1}{u} \\cdot u'$"}, {title:"Substitute", content:"$\\frac{1}{1+e^x} \\cdot e^x$"} ], answer:"$f'(x) = \\sigma(x)$" },
+    { id:"c9", difficulty:"Medium", q:"First-order Taylor expansion of $f(x) = e^x$ around $a=0$", steps:[ {title:"Formula", content:"$f(x) \\approx f(a) + f'(a)(x-a)$"}, {title:"Evaluate at 0", content:"$f(0) = 1$, $f'(0) = 1$"}, {title:"Substitute", content:"$1 + 1(x-0)$"} ], answer:"$e^x \\approx 1 + x$" },
+    { id:"c10", difficulty:"Medium", q:"Derivative of Leaky ReLU: $f(x) = \\max(0.01x, x)$", steps:[ {title:"Piecewise", content:"For $x > 0$, $f(x) = x$. For $x < 0$, $f(x) = 0.01x$."}, {title:"Differentiate", content:"Slopes are $1$ and $0.01$ respectively."} ], answer:"$f'(x) = 1$ if $x>0$, else $0.01$" },
+    { id:"c11", difficulty:"Hard", q:"Gradient of Softmax Cross-Entropy loss w.r.t logits $z_i$", steps:[ {title:"Chain Rule", content:"$L = -\\sum y_j \\log p_j$. Need $\\frac{\\partial L}{\\partial z_i}$."}, {title:"Softmax Jacobian", content:"$\\frac{\\partial p_j}{\\partial z_i} = p_i(1-p_i)$ for $i=j$, else $-p_i p_j$."}, {title:"Combine & Simplify", content:"Using $\\sum y_j = 1$, the terms cancel beautifully."} ], answer:"$\\frac{\\partial L}{\\partial z_i} = p_i - y_i$" },
+    { id:"c12", difficulty:"Hard", q:"Backprop: Find $\\frac{\\partial L}{\\partial W}$ for dense layer $h = Wx$, given $\\frac{\\partial L}{\\partial h}$", steps:[ {title:"Index Notation", content:"$h_i = \\sum_j W_{ij} x_j$"}, {title:"Chain Rule", content:"$\\frac{\\partial L}{\\partial W_{ij}} = \\sum_k \\frac{\\partial L}{\\partial h_k} \\frac{\\partial h_k}{\\partial W_{ij}}$"}, {title:"Partial", content:"$\\frac{\\partial h_k}{\\partial W_{ij}} = x_j$ if $k=i$, else $0$."} ], answer:"$\\nabla_W L = (\\nabla_h L) x^T$" },
+    { id:"c13", difficulty:"Hard", q:"Gradient of KL Divergence between $N(\\mu, \\sigma^2)$ and $N(0,1)$ w.r.t $\\mu$", steps:[ {title:"Formula", content:"$KL = \\frac{1}{2}(\\sigma^2 + \\mu^2 - 1 - \\ln(\\sigma^2))$"}, {title:"Differentiate", content:"Drop all terms not containing $\\mu$."}, {title:"Result", content:"$\\frac{\\partial}{\\partial \\mu} (\\frac{1}{2}\\mu^2) = \\mu$"} ], answer:"$\\frac{\\partial KL}{\\partial \\mu} = \\mu$" },
+    { id:"c14", difficulty:"Hard", q:"Gradient of Log-Sum-Exp function $f(z) = \\ln \\sum e^{z_i}$ w.r.t $z_k$", steps:[ {title:"Chain Rule", content:"$\\frac{\\partial f}{\\partial z_k} = \\frac{1}{\\sum e^{z_i}} \\cdot \\frac{\\partial}{\\partial z_k} \\sum e^{z_i}$"}, {title:"Derivative of sum", content:"Only $e^{z_k}$ depends on $z_k$, derivative is $e^{z_k}$."} ], answer:"$\\frac{\\partial f}{\\partial z_k} = \\frac{e^{z_k}}{\\sum e^{z_i}} = \\text{softmax}(z_k)$" },
+    { id:"c15", difficulty:"Hard", q:"Hessian matrix of quadratic form $f(x) = \\frac{1}{2} x^T A x$", steps:[ {title:"First Derivative", content:"$\\nabla_x f = \\frac{1}{2}(A + A^T)x$"}, {title:"Symmetric Assumption", content:"Assume $A$ is symmetric, $\\nabla_x f = Ax$"}, {title:"Second Derivative", content:"$\\nabla^2_x f = A$"} ], answer:"$H = A$ (or $\\frac{A+A^T}{2}$ if not symmetric)" },
+    { id:"c16", difficulty:"Hard", q:"Backprop: Find $\\frac{\\partial L}{\\partial x}$ for layer $h = Wx$, given $\\frac{\\partial L}{\\partial h}$", steps:[ {title:"Index Notation", content:"$h_i = \\sum_j W_{ij}x_j$"}, {title:"Chain Rule", content:"$\\frac{\\partial L}{\\partial x_j} = \\sum_i \\frac{\\partial L}{\\partial h_i} \\frac{\\partial h_i}{\\partial x_j}$"}, {title:"Partial", content:"$\\frac{\\partial h_i}{\\partial x_j} = W_{ij}$"} ], answer:"$\\nabla_x L = W^T (\\nabla_h L)$" },
+    { id:"c17", difficulty:"Hard", q:"Derivative of Huber loss w.r.t residual $a = y - \\hat{y}$ (for $|a| \\le \\delta$)", steps:[ {title:"Huber definition", content:"$L = \\frac{1}{2}a^2$ for $|a| \\le \\delta$, else $\\delta(|a| - \\frac{1}{2}\\delta)$"}, {title:"Differentiate quadratic region", content:"$\\frac{\\partial}{\\partial a} (\\frac{1}{2}a^2) = a$"} ], answer:"$L'(a) = a$ (acts like MSE near zero)" },
+    { id:"c18", difficulty:"Hard", q:"Derivative of Huber loss w.r.t residual $a$ (for $a > \\delta$)", steps:[ {title:"Linear region definition", content:"$L = \\delta(a - \\frac{1}{2}\\delta)$ for $a > \\delta$"}, {title:"Differentiate", content:"$\\frac{\\partial}{\\partial a} (\\delta a - c) = \\delta$"} ], answer:"$L'(a) = \\delta$ (acts like L1 far from zero)" },
+    { id:"c19", difficulty:"Hard", q:"Derivative of GeLU: $x \\Phi(x)$, where $\\Phi$ is Standard Normal CDF", steps:[ {title:"Product Rule", content:"$\\frac{d}{dx}[x \\Phi(x)] = 1 \\cdot \\Phi(x) + x \\cdot \\phi(x)$"}, {title:"Definitions", content:"$\\phi(x)$ is the PDF of Standard Normal."} ], answer:"$f'(x) = \\Phi(x) + x\\phi(x)$" },
+    { id:"c20", difficulty:"Hard", q:"Gradient of Batch Norm scale parameter $\\gamma$ in $y_i = \\gamma \\hat{x}_i + \\beta$", steps:[ {title:"Loss w.r.t y", content:"Assume we have $\\frac{\\partial L}{\\partial y_i}$ from upstream."}, {title:"Chain Rule", content:"$\\frac{\\partial L}{\\partial \\gamma} = \\sum_i \\frac{\\partial L}{\\partial y_i} \\frac{\\partial y_i}{\\partial \\gamma}$"}, {title:"Partial", content:"$\\frac{\\partial y_i}{\\partial \\gamma} = \\hat{x}_i$"} ], answer:"$\\frac{\\partial L}{\\partial \\gamma} = \\sum_i \\frac{\\partial L}{\\partial y_i} \\hat{x}_i$" }
+]},
+"probability": { label:"🎲 AI Probability", items:[
+    { id:"p1", difficulty:"Easy", q:"A fair coin is flipped 3 times. What is the probability of exactly 2 heads?", steps:[ {title:"Binomial Formula", content:"$P(X=k) = \\binom{n}{k}p^k(1-p)^{n-k}$"}, {title:"Plug in", content:"$n=3, k=2, p=0.5$"}, {title:"Calculate", content:"$3 \\cdot 0.25 \\cdot 0.5 = 0.375$"} ], answer:"$0.375$" },
+    { id:"p2", difficulty:"Easy", q:"Expected value of a fair 6-sided die.", steps:[ {title:"Formula", content:"$E[X] = \\sum x_i P(x_i)$"}, {title:"Sum", content:"$(1+2+3+4+5+6) \\cdot \\frac{1}{6}$"} ], answer:"$3.5$" },
+    { id:"p3", difficulty:"Easy", q:"Entropy of a fair coin flip.", steps:[ {title:"Shannon Entropy Formula", content:"$H(X) = -\\sum P(x) \\log_2 P(x)$"}, {title:"Calculate", content:"$- (0.5 \\log_2 0.5 + 0.5 \\log_2 0.5)$"}, {title:"Simplify", content:"$- (-0.5 - 0.5) = 1$"} ], answer:"$1$ bit" },
+    { id:"p4", difficulty:"Easy", q:"Expected value of a Poisson distribution with parameter $\\lambda$.", steps:[ {title:"Definition", content:"$P(X=k) = \\frac{\\lambda^k e^{-\\lambda}}{k!}$"}, {title:"Property", content:"For Poisson, mean and variance are equal to $\\lambda$."} ], answer:"$\\lambda$" },
+    { id:"p5", difficulty:"Easy", q:"Probability of an event occurring at least once in $n$ independent trials, if prob is $p$.", steps:[ {title:"Complement", content:"Calculate probability it NEVER occurs: $(1-p)^n$"}, {title:"Subtract", content:"$1 - P(\\text{never})$"} ], answer:"$1 - (1-p)^n$" },
+    { id:"p6", difficulty:"Medium", q:"Bayes' Rule: Disease prevalence $0.01$, Test Sensitivity $0.90$, FPR $0.05$. Find $P(D|+)$.", steps:[ {title:"Bayes", content:"$P(D|+) = \\frac{P(+|D)P(D)}{P(+)}$"}, {title:"Total Prob", content:"$P(+) = (0.9)(0.01) + (0.05)(0.99) = 0.0585$"}, {title:"Result", content:"$0.009 / 0.0585$"} ], answer:"$\\approx 15.38\\%$" },
+    { id:"p7", difficulty:"Medium", q:"Variance of the sum of independent variables $X$ and $Y$.", steps:[ {title:"Formula", content:"$Var(X+Y) = E[(X+Y)^2] - (E[X+Y])^2$"}, {title:"Expand", content:"$Var(X) + Var(Y) + 2Cov(X,Y)$"}, {title:"Independence", content:"If independent, $Cov(X,Y) = 0$."} ], answer:"$Var(X) + Var(Y)$" },
+    { id:"p8", difficulty:"Medium", q:"Definition of Cross-Entropy between true dist $p$ and approx $q$.", steps:[ {title:"Formula", content:"$H(p, q) = -\\sum p(x) \\log q(x)$"}, {title:"Relation to KL", content:"$H(p, q) = H(p) + D_{KL}(p || q)$"} ], answer:"$-\\sum p(x) \\log q(x)$" },
+    { id:"p9", difficulty:"Medium", q:"Law of Total Expectation for $E[X]$.", steps:[ {title:"Concept", content:"The expected value of $X$ is the expected value of the conditional expected value of $X$ given $Y$."}, {title:"Notation", content:"$E[X] = E_Y[ E_{X|Y}[X|Y] ]$"} ], answer:"$E[X] = E[ E[X|Y] ]$" },
+    { id:"p10", difficulty:"Medium", q:"Difference between MAP and MLE.", steps:[ {title:"MLE", content:"Maximizes $P(Data | \\theta)$."}, {title:"MAP", content:"Maximizes $P(\\theta | Data) \\propto P(Data | \\theta) P(\\theta)$."}, {title:"Difference", content:"MAP includes a prior distribution on $\\theta$."} ], answer:"MAP includes a prior $P(\\theta)$ acting as regularization." },
+    { id:"p11", difficulty:"Medium", q:"Memoryless property of the Exponential Distribution.", steps:[ {title:"Definition", content:"$P(X > s+t \\mid X > s) = P(X > t)$"}, {title:"Meaning", content:"The probability of waiting $t$ more minutes is the same regardless of having already waited $s$ minutes."} ], answer:"$P(X > s+t \\mid X > s) = P(X > t)$" },
+    { id:"p12", difficulty:"Medium", q:"KL Divergence is not a true distance metric. Why?", steps:[ {title:"Symmetry", content:"Distance metrics require $D(A,B) = D(B,A)$."}, {title:"KL Property", content:"$D_{KL}(P||Q) \\neq D_{KL}(Q||P)$ in general."}, {title:"Triangle Inequality", content:"KL also fails the triangle inequality."} ], answer:"It is asymmetric and violates the triangle inequality." },
+    { id:"p13", difficulty:"Medium", q:"Covariance definition.", steps:[ {title:"Formula", content:"$Cov(X,Y) = E[(X - E[X])(Y - E[Y])]$"}, {title:"Expanded", content:"$= E[XY] - E[X]E[Y]$"} ], answer:"$E[XY] - E[X]E[Y]$" },
+    { id:"p14", difficulty:"Hard", q:"Maximum Likelihood Estimate (MLE) for mean $\\mu$ of Gaussian.", steps:[ {title:"Log-Likelihood", content:"$L = -\\frac{n}{2}\\ln(2\\pi\\sigma^2) - \\frac{1}{2\\sigma^2}\\sum(x_i-\\mu)^2$"}, {title:"Derivative", content:"$\\frac{\\partial L}{\\partial \\mu} = \\frac{1}{\\sigma^2}\\sum(x_i-\\mu) = 0$"}, {title:"Solve", content:"$\\sum x_i = n\\mu \\implies \\mu = \\frac{1}{n}\\sum x_i$"} ], answer:"Sample Mean $\\frac{1}{n}\\sum x_i$" },
+    { id:"p15", difficulty:"Hard", q:"Reparameterization Trick in VAEs for $z \\sim N(\\mu, \\sigma^2)$.", steps:[ {title:"Problem", content:"Cannot backpropagate through a random sampling node."}, {title:"Trick", content:"Sample noise $\\epsilon \\sim N(0,1)$."}, {title:"Transform", content:"Compute $z = \\mu + \\sigma \\odot \\epsilon$. Now backprop works through $\\mu$ and $\\sigma$."} ], answer:"$z = \\mu + \\sigma \\odot \\epsilon$" },
+    { id:"p16", difficulty:"Hard", q:"KL Divergence between $N(\\mu, \\sigma^2)$ and $N(0,1)$.", steps:[ {title:"Formula Integration", content:"$\\int p(x) \\log(p(x)/q(x)) dx$"}, {title:"Evaluate expectations", content:"Yields $-\\log\\sigma - \\frac{1}{2} + \\frac{\\sigma^2 + \\mu^2}{2}$"} ], answer:"$\\frac{1}{2}(\\mu^2 + \\sigma^2 - 1 - \\ln(\\sigma^2))$" },
+    { id:"p17", difficulty:"Hard", q:"Conjugate prior of a Gaussian mean (with known variance).", steps:[ {title:"Definition", content:"A prior is conjugate if the posterior is in the same family."}, {title:"Math", content:"Gaussian Likelihood $\\times$ Gaussian Prior = Gaussian Posterior."} ], answer:"Gaussian Distribution" },
+    { id:"p18", difficulty:"Hard", q:"Stationary distribution $\\pi$ of a Markov Chain with transition matrix $P$.", steps:[ {title:"Definition", content:"A distribution that doesn't change after a transition."}, {title:"Equation", content:"$\\pi P = \\pi$ (Left eigenvector of $P$ with eigenvalue 1)."} ], answer:"$\\pi P = \\pi$" },
+    { id:"p19", difficulty:"Hard", q:"Evidence Lower Bound (ELBO) formula in VAEs.", steps:[ {title:"Log Evidence", content:"$\\log P(X) = D_{KL}(Q(z|X) || P(z|X)) + \\text{ELBO}$"}, {title:"ELBO Definition", content:"$E_{Q}[\\log P(X|z)] - D_{KL}(Q(z|X) || P(z))$"} ], answer:"Reconstruction Error $-$ KL Regularization" },
+    { id:"p20", difficulty:"Hard", q:"Mutual Information $I(X;Y)$ expressed via Entropies.", steps:[ {title:"Definition", content:"Information gained about $X$ by observing $Y$."}, {title:"Formulas", content:"$I(X;Y) = H(X) - H(X|Y) = H(Y) - H(Y|X)$"}, {title:"Joint", content:"$I(X;Y) = H(X) + H(Y) - H(X,Y)$"} ], answer:"$H(X) - H(X|Y)$" }
+]},
+"linalg": { label:"🧮 AI LinAlg", items:[
+    { id:"l1", difficulty:"Easy", q:"Compute dot product of $(1,2,3)$ and $(4,-5,6)$.", steps:[ {title:"Formula", content:"$\\sum a_i b_i$"}, {title:"Calculate", content:"$1(4) + 2(-5) + 3(6) = 4 - 10 + 18$"} ], answer:"$12$" },
+    { id:"l2", difficulty:"Easy", q:"Determinant of $A = \\begin{pmatrix}2&4\\\\1&3\\end{pmatrix}$.", steps:[ {title:"Formula", content:"$\\det = ad - bc$"}, {title:"Calculate", content:"$(2)(3) - (4)(1) = 6 - 4$"} ], answer:"$2$" },
+    { id:"l3", difficulty:"Easy", q:"L1 Norm of vector $v = (-3, 4)$.", steps:[ {title:"Formula", content:"$||v||_1 = \\sum |v_i|$"}, {title:"Calculate", content:"$|-3| + |4| = 3 + 4$"} ], answer:"$7$" },
+    { id:"l4", difficulty:"Easy", q:"L2 Norm of vector $v = (3, 4)$.", steps:[ {title:"Formula", content:"$||v||_2 = \\sqrt{\\sum v_i^2}$"}, {title:"Calculate", content:"$\\sqrt{3^2 + 4^2} = \\sqrt{9+16} = \\sqrt{25}$"} ], answer:"$5$" },
+    { id:"l5", difficulty:"Easy", q:"Trace of a square matrix.", steps:[ {title:"Definition", content:"Sum of the diagonal elements."}, {title:"Property", content:"Also equal to the sum of its eigenvalues."} ], answer:"$\\sum A_{ii}$ (or $\\sum \\lambda_i$)" },
+    { id:"l6", difficulty:"Medium", q:"Find eigenvalues of $A = \\begin{pmatrix}4&1\\\\2&3\\end{pmatrix}$.", steps:[ {title:"Characteristic Eq", content:"$\\det(A-\\lambda I) = (4-\\lambda)(3-\\lambda) - 2 = 0$"}, {title:"Expand", content:"$\\lambda^2 - 7\\lambda + 10 = 0$"}, {title:"Factor", content:"$(\\lambda-5)(\\lambda-2)=0$"} ], answer:"$\\lambda_1=5, \\lambda_2=2$" },
+    { id:"l7", difficulty:"Medium", q:"Multiply $A=\\begin{pmatrix}1&2\\\\0&1\\end{pmatrix}$ and $B=\\begin{pmatrix}3&0\\\\4&2\\end{pmatrix}$.", steps:[ {title:"Row 1", content:"$[1(3)+2(4), 1(0)+2(2)] = [11, 4]$"}, {title:"Row 2", content:"$[0(3)+1(4), 0(0)+1(2)] = [4, 2]$"} ], answer:"$\\begin{pmatrix}11&4\\\\4&2\\end{pmatrix}$" },
+    { id:"l8", difficulty:"Medium", q:"Frobenius Norm of a matrix $A$.", steps:[ {title:"Definition", content:"Square root of the sum of the absolute squares of its elements."}, {title:"Formula", content:"$||A||_F = \\sqrt{\\sum_{i,j} A_{ij}^2}$"} ], answer:"$\\sqrt{\\text{Trace}(A^T A)}$" },
+    { id:"l9", difficulty:"Medium", q:"Inverse of a 2x2 matrix $A = \\begin{pmatrix}a&b\\\\c&d\\end{pmatrix}$.", steps:[ {title:"Formula", content:"$\\frac{1}{\\det A} \\begin{pmatrix}d&-b\\\\-c&a\\end{pmatrix}$"} ], answer:"$\\frac{1}{ad-bc}\\begin{pmatrix}d&-b\\\\-c&a\\end{pmatrix}$" },
+    { id:"l10", difficulty:"Medium", q:"Properties of an Orthogonal Matrix $Q$.", steps:[ {title:"Definition", content:"Columns and rows are orthogonal unit vectors."}, {title:"Inverse Property", content:"$Q^T Q = Q Q^T = I$, so $Q^{-1} = Q^T$."} ], answer:"$Q^T = Q^{-1}$" },
+    { id:"l11", difficulty:"Medium", q:"Check if a symmetric matrix is Positive Definite.", steps:[ {title:"Definition", content:"$x^T A x > 0$ for all non-zero vector $x$."}, {title:"Eigenvalue Test", content:"All eigenvalues must be strictly positive."} ], answer:"All eigenvalues are $> 0$" },
+    { id:"l12", difficulty:"Medium", q:"Rank of an outer product matrix $ab^T$.", steps:[ {title:"Definition", content:"$a$ is $n \\times 1$, $b^T$ is $1 \\times m$."}, {title:"Property", content:"Every column is a multiple of $a$. There is only 1 linearly independent column."} ], answer:"Rank is $1$" },
+    { id:"l13", difficulty:"Medium", q:"Jacobian of a linear transformation $f(x) = Ax$.", steps:[ {title:"Definition", content:"$J_{ij} = \\frac{\\partial f_i}{\\partial x_j}$"}, {title:"Evaluate", content:"$f_i = \\sum_k A_{ik} x_k$. Derivative w.r.t $x_j$ is $A_{ij}$."} ], answer:"$J = A$" },
+    { id:"l14", difficulty:"Hard", q:"Show PCA's top component is leading eigenvector of covariance $\\Sigma$.", steps:[ {title:"Objective", content:"$\\max v^T \\Sigma v$ subject to $v^T v = 1$."}, {title:"Lagrangian", content:"$\\nabla_v [v^T \\Sigma v - \\lambda(v^T v - 1)] = 0$"}, {title:"Result", content:"$2\\Sigma v - 2\\lambda v = 0 \\implies \\Sigma v = \\lambda v$."} ], answer:"It solves the eigenvalue equation $\\Sigma v = \\lambda v$" },
+    { id:"l15", difficulty:"Hard", q:"Relate SVD ($A = U\\Sigma V^T$) to Eigendecomposition of $A^T A$.", steps:[ {title:"Compute $A^T A$", content:"$(U\\Sigma V^T)^T (U\\Sigma V^T) = V\\Sigma U^T U\\Sigma V^T$"}, {title:"Orthogonality", content:"$U^T U = I$, leaving $V \\Sigma^2 V^T$."} ], answer:"$V$ are eigenvectors of $A^T A$, singular values squared are eigenvalues." },
+    { id:"l16", difficulty:"Hard", q:"Projection matrix $P$ onto column space of $A$.", steps:[ {title:"Geometry", content:"Error $e = b - A\\hat{x}$ is orthogonal to $A$: $A^T(b - A\\hat{x}) = 0$."}, {title:"Solve for $\\hat{x}$", content:"$\\hat{x} = (A^T A)^{-1} A^T b$."}, {title:"Projection", content:"$p = A\\hat{x} = A(A^T A)^{-1} A^T b$."} ], answer:"$P = A(A^T A)^{-1} A^T$" },
+    { id:"l17", difficulty:"Hard", q:"Sherman-Morrison formula for inverse of $(A + uv^T)$.", steps:[ {title:"Application", content:"Rank-1 update to inverse matrix (used in quasi-Newton)."}, {title:"Formula", content:"$A^{-1} - \\frac{A^{-1}uv^T A^{-1}}{1 + v^T A^{-1}u}$"} ], answer:"$A^{-1} - \\frac{A^{-1}uv^T A^{-1}}{1 + v^T A^{-1}u}$" },
+    { id:"l18", difficulty:"Hard", q:"Cosine Similarity between two vectors.", steps:[ {title:"Formula", content:"$\\cos(\\theta) = \\frac{A \\cdot B}{||A|| ||B||}$"}, {title:"Bounds", content:"Result is between -1 (opposite) and 1 (identical)."} ], answer:"$\\frac{A \\cdot B}{||A|| ||B||}$" },
+    { id:"l19", difficulty:"Hard", q:"LU Decomposition constraints.", steps:[ {title:"Definition", content:"Factorizing $A = LU$ (Lower triangular $\\times$ Upper triangular)."}, {title:"Requirement", content:"Requires non-zero leading principal minors (or pivoting is needed)."} ], answer:"$A = LU$" },
+    { id:"l20", difficulty:"Hard", q:"Diagonalization of a symmetric matrix $A$.", steps:[ {title:"Spectral Theorem", content:"Any real symmetric matrix is diagonalizable by an orthogonal matrix."}, {title:"Decomposition", content:"$A = Q \\Lambda Q^T$, where $Q$ is orthogonal."} ], answer:"$A = Q \\Lambda Q^T$" }
+]},
+"optimization": { label:"⚙️ Optimization", items:[
+    { id:"o1", difficulty:"Easy", q:"Gradient Descent update rule.", steps:[ {title:"Concept", content:"Move opposite the gradient to minimize loss."}, {title:"Formula", content:"$w_{t+1} = w_t - \\eta \\nabla L(w_t)$"} ], answer:"$w_{t+1} = w_t - \\eta \\nabla L(w_t)$" },
+    { id:"o2", difficulty:"Easy", q:"Minimum of $f(x) = x^2 - 4x + 5$.", steps:[ {title:"Derivative", content:"$f'(x) = 2x - 4$"}, {title:"Set to zero", content:"$2x = 4 \\implies x = 2$"}, {title:"Evaluate", content:"$f(2) = 4 - 8 + 5 = 1$"} ], answer:"$x = 2$, min value is $1$" },
+    { id:"o3", difficulty:"Easy", q:"Gradient of $f(x) = x^2$ at $x=3$, and update with $\\eta=0.1$.", steps:[ {title:"Gradient", content:"$f'(x) = 2x$. At $x=3$, grad is $6$."}, {title:"Update", content:"$x_{new} = 3 - 0.1(6) = 2.4$"} ], answer:"$2.4$" },
+    { id:"o4", difficulty:"Easy", q:"Learning Rate Decay concept.", steps:[ {title:"Problem", content:"Fixed LR might bounce around the minimum."}, {title:"Solution", content:"Gradually reduce LR (e.g., step decay, exponential) to converge."} ], answer:"Reducing $\\eta$ over time to ensure convergence." },
+    { id:"o5", difficulty:"Easy", q:"Stochastic vs Batch Gradient Descent.", steps:[ {title:"Batch", content:"Computes gradient over entire dataset."}, {title:"Stochastic", content:"Computes gradient over 1 sample (or mini-batch) for noisy, faster updates."} ], answer:"SGD uses subsets for faster, noisy steps." },
+    { id:"o6", difficulty:"Medium", q:"Convexity condition (Second Derivative Test) for 1D.", steps:[ {title:"Test", content:"Function is convex if $f''(x) \\ge 0$ for all $x$."}, {title:"Meaning", content:"The function curves upwards, guaranteeing any local minimum is a global minimum."} ], answer:"$f''(x) \\ge 0$" },
+    { id:"o7", difficulty:"Medium", q:"Why does L1 regularization encourage sparsity compared to L2?", steps:[ {title:"L2 Geometry", content:"Spherical contours hit loss ellipses at tangents with non-zero weights."}, {title:"L1 Geometry", content:"Diamond contours have sharp corners on axes, heavily favoring exact zeros."} ], answer:"L1's diamond-shaped penalty intersects axes." },
+    { id:"o8", difficulty:"Medium", q:"Newton's Method update rule.", steps:[ {title:"Taylor Series", content:"Uses second-order approximation of the loss."}, {title:"Formula", content:"$w_{t+1} = w_t - H^{-1} \\nabla L(w_t)$, where $H$ is the Hessian."} ], answer:"$w_{t+1} = w_t - H^{-1} \\nabla L(w_t)$" },
+    { id:"o9", difficulty:"Medium", q:"RMSprop update rule.", steps:[ {title:"Moving Avg", content:"$v_t = \\beta v_{t-1} + (1-\\beta)g_t^2$"}, {title:"Update", content:"Divide gradient by $\\sqrt{v_t} + \\epsilon$ to normalize step sizes across dimensions."} ], answer:"$w_{t+1} = w_t - \\frac{\\eta}{\\sqrt{v_t}+\\epsilon} g_t$" },
+    { id:"o10", difficulty:"Medium", q:"Adagrad decay problem.", steps:[ {title:"Accumulation", content:"Adagrad sums all past squared gradients."}, {title:"Result", content:"The denominator grows indefinitely, shrinking the learning rate to zero prematurely."} ], answer:"LR shrinks to 0 due to monotonic sum of squared gradients." },
+    { id:"o11", difficulty:"Medium", q:"Lipschitz Continuity in Optimization.", steps:[ {title:"Definition", content:"$||f(x) - f(y)|| \\le L ||x - y||$"}, {title:"Significance", content:"Bounds how fast the function (or gradient) can change, ensuring stable learning rates."} ], answer:"Bounds the maximum rate of change." },
+    { id:"o12", difficulty:"Medium", q:"Saddle Point detection.", steps:[ {title:"Gradient", content:"$\\nabla f = 0$ (Critical point)."}, {title:"Hessian", content:"Eigenvalues of Hessian have mixed signs (some positive, some negative)."} ], answer:"$\\nabla f = 0$, Hessian has mixed-sign eigenvalues." },
+    { id:"o13", difficulty:"Medium", q:"Weight Decay vs L2 Regularization.", steps:[ {title:"L2 Reg", content:"Adds penalty to loss: $L + \\frac{\\lambda}{2}w^2$. Modifies gradient."}, {title:"Weight Decay", content:"Directly shrinks weight during update: $w_{t+1} = w_t(1 - \\lambda) - \\eta \\nabla L$."}, {title:"Difference", content:"Identical for standard SGD, but DIFFERENT for adaptive optimizers like Adam."} ], answer:"Different formulations when using Adam." },
+    { id:"o14", difficulty:"Medium", q:"Gradient Clipping.", steps:[ {title:"Problem", content:"Exploding gradients in RNNs."}, {title:"Solution", content:"If $||g|| > c$, set $g = c \\frac{g}{||g||}$."} ], answer:"Limits maximum norm of gradient vector." },
+    { id:"o15", difficulty:"Hard", q:"Derive Gradient Descent with Momentum.", steps:[ {title:"Velocity", content:"Maintain Exponential Moving Average: $v_t = \\gamma v_{t-1} + \\eta \\nabla L(w_t)$."}, {title:"Update", content:"$w_{t+1} = w_t - v_t$."}, {title:"Why?", content:"Smooths trajectory by accumulating consistent directions."} ], answer:"$v_t = \\gamma v_{t-1} + \\eta \\nabla L$, $w -= v_t$" },
+    { id:"o16", difficulty:"Hard", q:"Why does Adam include a bias correction term $\\frac{1}{1-\\beta^t}$?", steps:[ {title:"Initialization", content:"EMA starts at $0$: $m_0 = 0$."}, {title:"Bias", content:"Early updates are heavily biased toward zero because of the $1-\\beta$ factor."}, {title:"Correction", content:"Dividing by $1-\\beta^t$ restores the expected value to the true mean of gradients."} ], answer:"To correct zero-initialization bias in early steps." },
+    { id:"o17", difficulty:"Hard", q:"Nesterov Accelerated Gradient (NAG) vs Standard Momentum.", steps:[ {title:"Standard", content:"Calculates gradient at current position, then adds momentum jump."}, {title:"Nesterov", content:"Makes the momentum jump FIRST, then calculates gradient at the 'lookahead' position."}, {title:"Result", content:"More responsive to changes in curvature."} ], answer:"Calculates gradient at the 'lookahead' position." },
+    { id:"o18", difficulty:"Hard", q:"KKT Conditions (Karush-Kuhn-Tucker).", steps:[ {title:"Usage", content:"Necessary conditions for a solution in non-linear programming with constraints."}, {title:"Core Conditions", content:"Stationarity, Primal feasibility, Dual feasibility, Complementary slackness."} ], answer:"First-order necessary conditions for constrained optimization." },
+    { id:"o19", difficulty:"Hard", q:"Hessian Condition Number impact.", steps:[ {title:"Definition", content:"Ratio of largest to smallest eigenvalue of Hessian: $\\kappa = \\frac{\\lambda_{max}}{\\lambda_{min}}$."}, {title:"Impact", content:"High $\\kappa$ means narrow ravines; SGD oscillates wildly and converges slowly."} ], answer:"High ratio causes zigzagging and slow convergence." },
+    { id:"o20", difficulty:"Hard", q:"Proof that MSE is Convex.", steps:[ {title:"Function", content:"$f(w) = ||Xw - y||^2$"}, {title:"Hessian", content:"$\\nabla^2 f(w) = 2X^T X$"}, {title:"Definiteness", content:"For any $v$, $v^T(X^T X)v = (Xv)^T(Xv) = ||Xv||^2 \\ge 0$. Since Hessian is Positive Semi-Definite, it's convex."} ], answer:"Hessian $2X^T X$ is Positive Semi-Definite." }
+]}
+};
+
+/* =========================================================
+   APP STATE
+   ========================================================= */
+let userState = {
+    savedCards: JSON.parse(localStorage.getItem('ms_saved_cards') || '[]'),
+    knownList: JSON.parse(localStorage.getItem('ms_known') || '[]'),
+    settings: JSON.parse(localStorage.getItem('ms_settings') || JSON.stringify({ theme:'default', fontSize:16, autoPlay:false }))
+};
+
+function saveState(){
+    localStorage.setItem('ms_saved_cards', JSON.stringify(userState.savedCards));
+    localStorage.setItem('ms_known', JSON.stringify(userState.knownList));
+    localStorage.setItem('ms_settings', JSON.stringify(userState.settings));
+}
+
+const NAV_ORDER = ['saved','calculus','probability','linalg','optimization'];
+const NAV_LABELS = { 
+    saved: "⭐ Saved",
+    calculus: MATH_DB.calculus.label, 
+    probability: MATH_DB.probability.label,
+    linalg: MATH_DB.linalg.label, 
+    optimization: MATH_DB.optimization.label 
+};
+
+let activeCat = 'calculus';
+let activeDifficulty = 'All';
+
+/* =========================================================
+   INITIALIZATION
+   ========================================================= */
+window.onload = () => {
+    applySettingsUI();
+    renderNav();
+    renderSubFilterBar();
+    renderFeed();
+};
+
+function renderKatex(elementId){
+    if (typeof renderMathInElement === 'undefined') return;
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    renderMathInElement(el, {
+        delimiters: [
+            {left:'$$', right:'$$', display:true},
+            {left:'$', right:'$', display:false}
+        ],
+        throwOnError:false
+    });
+}
+
+/* =========================================================
+   NAVIGATION & FILTERS
+   ========================================================= */
+function renderNav(){
+    const nav = document.getElementById('catBar');
+    nav.innerHTML = NAV_ORDER.map(key => `
+        <div class="cat-item ${key===activeCat?'active':''}" onclick="switchCategory('${key}')">${NAV_LABELS[key]}</div>
+    `).join('');
+}
+
+function switchCategory(key){
+    if (activeCat === key) return;
+    activeCat = key;
+    activeDifficulty = 'All'; // Reset difficulty on category switch
+    renderNav();
+    renderSubFilterBar();
+    renderFeed();
+    document.getElementById('main-feed').scrollTop = 0;
+}
+
+function renderSubFilterBar(){
+    const bar = document.getElementById('subFilterBar');
+    if (activeCat === 'saved') {
+        bar.style.display = 'flex';
+        const opts = ['All','Easy','Medium','Hard'];
+        bar.innerHTML = opts.map(o => `<div class="chip ${activeDifficulty===o?'active':''}" onclick="setDifficulty('${o}')">${o}</div>`).join('');
+    } else {
+        bar.style.display = 'flex';
+        const opts = ['All','Easy','Medium','Hard'];
+        bar.innerHTML = opts.map(o => `<div class="chip ${activeDifficulty===o?'active':''}" onclick="setDifficulty('${o}')">${o}</div>`).join('');
+    }
+}
+
+function setDifficulty(d){
+    activeDifficulty = d;
+    renderSubFilterBar();
+    renderFeed();
+}
+
+/* =========================================================
+   FEED GENERATION
+   ========================================================= */
+function getAllItemsAsArray() {
+    let all = [];
+    for(let cat in MATH_DB) {
+        all = all.concat(MATH_DB[cat].items);
+    }
+    return all;
+}
+
+function emptyStateHTML(title, msg){
+    return `<div class="snap-section"><div class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+        <h3>${title}</h3><p>${msg}</p>
+    </div></div>`;
+}
+
+function renderFeed(){
+    const feed = document.getElementById('main-feed');
+    
+    let itemsToRender = [];
+
+    if (activeCat === 'saved') {
+        const allItems = getAllItemsAsArray();
+        itemsToRender = allItems.filter(i => userState.savedCards.includes(i.id));
+    } else {
+        itemsToRender = MATH_DB[activeCat].items;
+    }
+
+    // Apply difficulty filter
+    if (activeDifficulty !== 'All') {
+        itemsToRender = itemsToRender.filter(i => i.difficulty === activeDifficulty);
+    }
+
+    if (itemsToRender.length === 0) {
+        if (activeCat === 'saved' && userState.savedCards.length === 0) {
+            feed.innerHTML = emptyStateHTML('No Saved Cards', 'Tap the bookmark icon on any card to save it here for later review.');
+        } else {
+            feed.innerHTML = emptyStateHTML('No problems found', 'Try selecting a different difficulty filter.');
+        }
+    } else {
+        feed.innerHTML = itemsToRender.map(item => renderMathCard(item)).join('');
+        renderKatex('main-feed');
+    }
+}
+
+function renderMathCard(item){
+    const diffClass = 'diff-'+item.difficulty.toLowerCase();
+    const isSaved = userState.savedCards.includes(item.id);
+    const isKnown = userState.knownList.includes(item.id);
+    const catLabel = MATH_DB[currentMathCatOf(item.id)]?.label || 'Math';
+
+    return `
+    <div class="snap-section">
+        <div class="card" onclick="flipCard(this)">
+            <div class="card-inner">
+                <div class="face face-front">
+                    <button class="save-card-btn ${isSaved?'saved':''}" onclick="event.stopPropagation(); toggleSaveCard(this,'${item.id}')">
+                        <svg viewBox="0 0 24 24"><path d="M17 3H7c-1.1 0-1.99.9-1.99 2L5 21l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
+                    </button>
+                    <div class="badge-row"><span class="tag-badge ${diffClass}">${item.difficulty}</span></div>
+                    <div class="card-question">${item.q}</div>
+                    <div class="level-badge">${catLabel}</div>
+                </div>
+                <div class="face face-back">
+                    <div class="badge-row">
+                        <span class="tag-badge ${diffClass}">${item.difficulty}</span>
+                        ${isKnown?'<span class="tag-badge" style="background:rgba(16,185,129,.2);color:var(--success);">Mastered</span>':''}
+                    </div>
+                    <div class="card-question" style="font-size:1.1rem; opacity:.9;">${item.q}</div>
+                    <div class="answer-summary">Answer: ${item.answer}</div>
+                    <div class="card-buttons">
+                        <button class="card-action-btn primary" style="flex-basis:100%;" onclick="event.stopPropagation(); openStepPlayer('${item.id}')">
+                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Play Step-by-Step
+                        </button>
+                        <button class="card-action-btn ${isKnown?'success':''}" style="flex-basis:100%;" onclick="event.stopPropagation(); toggleKnown(this,'${item.id}')">
+                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Mark as Mastered
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="tap-hint">Tap card to flip for answer</div>
+    </div>`;
+}
+
+function currentMathCatOf(itemId){
+    for (const k of Object.keys(MATH_DB)) {
+        if (MATH_DB[k].items.find(i=>i.id===itemId)) return k;
+    }
+    return null;
+}
+
+function findMathItem(id){
+    for (const k of Object.keys(MATH_DB)) {
+        const found = MATH_DB[k].items.find(i=>i.id===id);
+        if (found) return found;
+    }
+    return null;
+}
+
+/* =========================================================
+   INTERACTIONS & STATE
+   ========================================================= */
+function flipCard(card){ card.classList.toggle('flipped'); }
+
+function toggleSaveCard(btn, id){
+    if (userState.savedCards.includes(id)) {
+        userState.savedCards = userState.savedCards.filter(x=>x!==id);
+        btn.classList.remove('saved');
+    } else {
+        userState.savedCards.push(id);
+        btn.classList.add('saved');
+    }
+    saveState();
+    if (activeCat === 'saved') renderFeed(); // update view immediately if on saved tab
+}
+
+function toggleKnown(btn, id){
+    if (userState.knownList.includes(id)) {
+        userState.knownList = userState.knownList.filter(x=>x!==id);
+        btn.classList.remove('success');
+    } else {
+        userState.knownList.push(id);
+        btn.classList.add('success');
+    }
+    saveState();
+}
+
+/* =========================================================
+   STEP-BY-STEP MATH PLAYER
+   ========================================================= */
+let stepPlayerState = { itemId:null, idx:0, steps:[], answer:'', autoTimer:null };
+
+function openStepPlayer(itemId){
+    const item = findMathItem(itemId);
+    if (!item) return;
+    stepPlayerState = { itemId, idx:0, steps:item.steps, answer:item.answer, autoTimer:null };
+    document.getElementById('stepSheetTitle').textContent = 'Step-by-Step Solution';
+    document.getElementById('stepSheetMeta').textContent = item.difficulty + ' · ' + (MATH_DB[currentMathCatOf(itemId)]?.label || '');
+    renderStepPlayer();
+    document.getElementById('overlay').classList.add('active');
+    document.getElementById('stepSheet').classList.add('open');
+}
+
+function renderStepPlayer(){
+    const { idx, steps, answer } = stepPlayerState;
+    const progress = document.getElementById('stepProgress');
+    progress.innerHTML = steps.map((_,i) => `<div class="step-dot ${i<idx?'done':(i===idx?'current':'')}"></div>`).join('');
+    document.getElementById('stepTitle').textContent = `Step ${idx+1} of ${steps.length}: ${steps[idx].title}`;
+    document.getElementById('stepContent').innerHTML = steps[idx].content;
+    document.getElementById('stepPrevBtn').disabled = idx === 0;
+    
+    const nextBtn = document.getElementById('stepNextBtn');
+    const isLast = idx === steps.length - 1;
+    nextBtn.textContent = isLast ? 'Finish ✓' : 'Next ▶';
+    
+    const finalBox = document.getElementById('finalAnswerBox');
+    if (isLast) {
+        finalBox.classList.add('show');
+        document.getElementById('finalAnswerContent').innerHTML = answer;
+    } else {
+        finalBox.classList.remove('show');
+    }
+    renderKatex('stepSheet');
+    
+    if (userState.settings.autoPlay && stepPlayerState.autoTimer===null && !isLast) {
+        startAutoAdvance();
+    } else if (isLast) {
+        clearAutoAdvance();
+    }
+}
+
+function stepPlayerNext(){
+    if (stepPlayerState.idx < stepPlayerState.steps.length - 1) {
+        stepPlayerState.idx++;
+        renderStepPlayer();
+    } else {
+        closeAllOverlays();
+    }
+}
+
+function stepPlayerPrev(){
+    if (stepPlayerState.idx > 0) {
+        stepPlayerState.idx--;
+        renderStepPlayer();
+    }
+}
+
+function startAutoAdvance(){
+    clearAutoAdvance();
+    stepPlayerState.autoTimer = setInterval(()=>{
+        if (stepPlayerState.idx < stepPlayerState.steps.length - 1) {
+            stepPlayerState.idx++;
+            renderStepPlayer();
+        } else {
+            clearAutoAdvance();
+        }
+    }, 4000);
+}
+
+function clearAutoAdvance(){
+    if (stepPlayerState.autoTimer) { 
+        clearInterval(stepPlayerState.autoTimer); 
+        stepPlayerState.autoTimer = null; 
+    }
+}
+
+/* =========================================================
+   TOAST
+   ========================================================= */
+let toastTimer = null;
+function showToast(msg, ms){
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=> t.classList.remove('show'), ms || 3500);
+}
+
+/* =========================================================
+   OVERLAYS / SETTINGS
+   ========================================================= */
+function closeAllOverlays(){
+    clearAutoAdvance();
+    document.getElementById('stepSheet').classList.remove('open');
+    document.getElementById('settingsModal').classList.remove('open');
+    document.getElementById('overlay').classList.remove('active');
+}
+
+function openSettings(){
+    const modal = document.getElementById('settingsModal');
+    document.getElementById('overlay').classList.add('active');
+    modal.classList.add('open');
+    document.getElementById('fontSlider').value = userState.settings.fontSize;
+    const sw = document.getElementById('autoPlaySwitch');
+    sw.classList.toggle('active', !!userState.settings.autoPlay);
+    
+    document.querySelectorAll('.theme-opt').forEach(el=>el.classList.remove('active'));
+    const activeTheme = userState.settings.theme==='default' ? 't-midnight' : 't-'+userState.settings.theme;
+    const target = document.querySelector('.'+activeTheme);
+    if (target) target.classList.add('active');
+}
+
+function setTheme(name){
+    userState.settings.theme = name; saveState(); applySettingsUI();
+    document.querySelectorAll('.theme-opt').forEach(el=>el.classList.remove('active'));
+    const activeTheme = name==='default' ? 't-midnight' : 't-'+name;
+    document.querySelector('.'+activeTheme).classList.add('active');
+}
+
+function setFontSize(val){ 
+    userState.settings.fontSize = parseInt(val); 
+    saveState(); 
+    applySettingsUI(); 
+}
+
+function toggleAutoPlay(){
+    userState.settings.autoPlay = !userState.settings.autoPlay;
+    document.getElementById('autoPlaySwitch').classList.toggle('active', userState.settings.autoPlay);
+    saveState();
+}
+
+function applySettingsUI(){
+    document.body.className = '';
+    if (userState.settings.theme !== 'default') document.body.classList.add('theme-'+userState.settings.theme);
+    document.documentElement.style.setProperty('--base-font-size', userState.settings.fontSize+'px');
+}
+
+function clearAllData(){
+    if (!confirm('This will permanently delete all your saved cards and mastered progress. Continue?')) return;
+    userState.savedCards = []; 
+    userState.knownList = [];
+    saveState();
+    
+    closeAllOverlays();
+    showToast('App data cleared successfully.');
+    renderFeed();
+}
+</script>
+</body>
+</html>
